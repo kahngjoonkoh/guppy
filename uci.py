@@ -28,11 +28,11 @@ def main():
         logging.debug(line)
 
     # input stack initialised
-    queue = []
+    stack = []
     # take stdinputs until 'quit'
     while True:
         if input_stack:
-            cmd = queue.pop()
+            cmd = stack.pop()
         else:
             cmd = input()
 
