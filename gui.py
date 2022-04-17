@@ -1,11 +1,14 @@
 import ctypes
 import random
+import time
+from tkinter import *
+
 import chess
 import pygame
-from tkinter import *
 
 import guppy
 import guppy as engine
+
 
 class App:
     def __init__(self, show_info, play_as=None):
@@ -33,7 +36,7 @@ class App:
         self.tile_on_focus = None
         self.pieces = []
         self.hist = []
-
+        self.time_start = 0
         self.promotion_piece = None
 
     def run(self):
@@ -181,17 +184,19 @@ class App:
             else:
                 return chess.BLACK
 
-
     def make_engine_move(self):
-        depth = 3
+        self.time_start = time.time()
+        depth = 2
+        qsearch = True
         if not self.player_side == chess.WHITE:
-            move_val = engine.generate_move(self.board, depth, False)
+            move_val = engine.generate_move(self.board, depth, True, qsearch)
         elif not self.player_side == chess.BLACK:
-            move_val = engine.generate_move(self.board, depth, False)
+            move_val = engine.generate_move(self.board, depth, False, qsearch)
         if self.board.outcome() == None:
-            random_move = random.choice([move for move in self.board.legal_moves])
-            self.make_move(random_move, "move")
-            # self.make_move(move_val[0], "move")
+            # random_move = random.choice([move for move in self.board.legal_moves])
+            # self.make_move(random_move, "move")
+            self.make_move(move_val[0], "move")
+
         # searcher = engine.Searcher()
         # start = time.time()
         # for _depth, move, score in searcher.search(hist[-1], hist):
@@ -231,14 +236,24 @@ class App:
                         self.promote(chess.WHITE)
                         move.promotion = self.promotion_piece
                 if self.player_side == chess.BLACK:
-                    if chess.square_rank(move.to_square) == 0 and self.board.piece_type_at(move.from_square) == chess.PAWN:
+                    if chess.square_rank(move.to_square) == 0 and self.board.piece_type_at(
+                            move.from_square) == chess.PAWN:
                         self.promote(chess.BLACK)
                         move.promotion = self.promotion_piece
 
             if move in self.board.legal_moves:
-                if self.board.turn == chess.WHITE:
-                    self.info("")
-                self.info(f"{move}: {guppy.move_value(self.board, move)}")
+                if (self.board.turn == chess.WHITE) and (self.player_side == chess.WHITE):
+                    self.info(f"\n{move}: {guppy.move_value(self.board, move)}")
+                elif (self.board.turn == chess.WHITE) and (self.player_side == chess.BLACK):
+                    self.info(
+                        f"\n{move}: {guppy.move_value(self.board, move)} (elapsed: {time.time() - self.time_start:.2f}s)")
+                elif (self.board.turn == chess.BLACK) and (self.player_side == chess.WHITE):
+                    self.info(
+                        f"{move}: {guppy.move_value(self.board, move)} (elapsed: {time.time() - self.time_start:.2f}s)")
+                elif (self.board.turn == chess.BLACK) and (self.player_side == chess.BLACK):
+                    self.info(f"{move}: {guppy.move_value(self.board, move)}")
+                else:
+                    print(self.board.turn, self.player_side)
                 self.board.push(move)
                 self.set_piece_data()
                 self.hist.append(self.board.fen())
@@ -317,5 +332,5 @@ class App:
 
 
 if __name__ == "__main__":
-    app = App(show_info=True)
+    app = App(show_info=True, play_as=chess.BLACK)
     app.run()
