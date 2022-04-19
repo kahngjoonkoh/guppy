@@ -31,19 +31,20 @@ def main():
     stack = []
     # take stdinputs until 'quit'
     while True:
-        if input_stack:
+        if stack:
             cmd = stack.pop()
         else:
             cmd = input()
 
-        logging.debug(f" {cmd} ")
+        logging.debug(f">>>> {cmd}")
 
         if cmd == 'quit':
             break
 
-        # TODO
         elif cmd == 'uci':
-            pass
+            output("id name Guppy")
+            output("id author Kahngjoon Koh")
+            output("uciok")
 
         # TODO
         elif cmd == 'debug':
@@ -51,7 +52,7 @@ def main():
 
         # TODO
         elif cmd == 'isready':
-            pass
+            output("readyok")
 
         # TODO
         elif cmd == 'setoption':
@@ -63,7 +64,7 @@ def main():
 
         # TODO
         elif cmd == 'ucinewgame':
-            pass
+            stack.append(f"position fen {guppy.board.fen()}")
 
         #TODO
         elif cmd.startswith('position'):

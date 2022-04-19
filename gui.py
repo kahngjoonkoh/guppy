@@ -30,6 +30,7 @@ class App:
         self.chess_grid_surface = pygame.Surface((8 * self.TILE_SIZE, 8 * self.TILE_SIZE))
 
         # CHESS VARIABLES
+        self.board = None
         self.done = False
 
         self.player_side = None
