@@ -71,7 +71,7 @@ class App:
                     self.tile_on_focus = None
 
             if self.board.turn != self.player_side:
-                self.make_engine_move()
+                self.think()
             if self.board.outcome() == None:
                 self.refresh_chess_grid_surface()
             else:
