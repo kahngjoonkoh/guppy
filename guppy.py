@@ -5,6 +5,7 @@ from ctypes import *
 
 import chess
 import chess.polyglot
+import chess.syzygy
 
 
 class Node:
@@ -72,6 +73,7 @@ class Engine:
 
         self.CACHE_LIMIT = 20000
         self.INFINITY = 10000
+        self.ENDGAME = 9000
         # Average game takes 40 moves to finish = 80 plies
         self.MAX_SEARCH_DEPTH = 100
         # Evaluation adjustment
@@ -102,6 +104,13 @@ class Engine:
     # Create another counter for saving best moves so far. (without discarding all the ply)
     # Create UCI wrapper w/o threads
     # Move sort only when root.
+    def generate_book_moves(self):
+        book_moves = []
+        bin_file = "datatables/book_moves/Balsa_v110221.bin"
+        with chess.polyglot.open_reader(bin_file) as reader:
+            for entry in reader.find_all(self.board):
+                book_moves.append(entry.move)
+        return book_moves
 
     #TODO ENGINE MISSES MATE IN 1. BECAUSE THE EVALUATION FUNCTION DOES NOT GIVE MATE AS VALUE.
     # Implement mate score in evaluation function
@@ -117,6 +126,19 @@ class Engine:
         beta = self.INFINITY
         self.mate = False
 
+        legals = self.board.legal_moves
+
+        # Makes a book move if book moves exist.
+        if self.w_moves < 20 and self.b_moves < 20:
+            try:
+                random_book_move = chess.polyglot.MemoryMappedReader("datatables/book_moves/Balsa_v110221.bin").weighted_choice(
+                    self.board).move
+            except IndexError:
+                random_book_move = None
+            if random_book_move in legals:
+                self.best_move = random_book_move
+                return 1, 1, self.move_value(random_book_move), 0, random_book_move
+
         for depth in range(1, self.MAX_SEARCH_DEPTH):
             self.qdepth = 0
             if self.mate:
@@ -126,7 +148,7 @@ class Engine:
                 self.best_move = self.moves[self.board.fen()] # best move fallback
             else:
                 break
-            if abs(fg) >= 9900:
+            if abs(fg) >= 7000:
                 score = fg if self.board.turn == chess.WHITE else -fg
             else:
                 score = int(fg/2.56) if self.board.turn == chess.WHITE else -int(fg/2.56)
@@ -242,8 +264,30 @@ class Engine:
         return False if self.board.is_capture(move) or self.board.gives_check(move) else True
 
     def evaluate_board(self):
-        fen = self.board.fen()
-        score = self.nnue.nnue_evaluate_fen(fen.encode('UTF-8'))
+        if len(self.board.piece_map().values()) <= 5:
+            with chess.syzygy.open_tablebase("datatables/endgames/3-4-5") as tablebase:
+                dtz = tablebase.get_dtz(self.board)
+                wdl = tablebase.get_wdl(self.board)
+                if wdl >= 1:
+                    if self.board.is_checkmate():
+                        score = self.INFINITY
+                    # Pawn advance or capture or promotion
+                    elif self.board.halfmove_clock == 0 or self.board.promoted:
+                        score = self.ENDGAME
+                    else:
+                        score = self.ENDGAME - dtz*50
+                elif wdl == 0:
+                    fen = self.board.fen()
+                    score = self.nnue.nnue_evaluate_fen(fen.encode('UTF-8'))
+                elif wdl <= -1:
+                    if self.board.halfmove_clock == 0:
+                        score = -self.ENDGAME
+                    else:
+                        score = -self.ENDGAME - dtz*50
+        else:
+            fen = self.board.fen()
+            score = self.nnue.nnue_evaluate_fen(fen.encode('UTF-8'))
+            print(self.nnue.nnue_evaluate_fen("r4rk1/pp3p1p/1qnb1np1/2ppp1b1/8/8/8/4K3 w - - 0 1".encode('UTF-8')))
         return score if self.board.turn == chess.WHITE else -score
 
     # # used when sorting legal moves in best possible move order.
@@ -264,14 +308,11 @@ class Engine:
         # ponder = self.moves.get(self.board.fen(), None)
         # return [bestmove, ponder] if ponder != None else [bestmove]
         self.board.push(self.best_move)
-
-        print(self.board)
-        print("White's turn to move" if self.board.turn == chess.WHITE else "Black's turn to move")
         return [self.best_move]
 
     def add_move_counter(self):
-        # leave time for at least 10 moves
+        # leave time for at least 20 moves due to endgames lasting a long time.
         if self.board.turn == chess.WHITE:
-            self.w_moves = min(self.w_moves + 1, 30)
+            self.w_moves = min(self.w_moves + 1, 40)
         else:
-            self.b_moves = min(self.b_moves + 1, 30)
+            self.b_moves = min(self.b_moves + 1, 40)

@@ -9,4 +9,5 @@ build
 uci.build
 uci.dist
 uci.onefile-build
-
+*.md5
+*.bat

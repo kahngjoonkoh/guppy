@@ -27,7 +27,7 @@ def output(line):
     logging.debug(line)
 
 
-def main():
+def main(debug):
     # parser = argparse.ArgumentParser()
     # parser.add_argument('Move Overhead',
     #                     help='Assume a time delay of x ms due to network and GUI overheads. This is useful to avoid losses on time in those cases.',
@@ -54,7 +54,7 @@ def main():
         time_limit_present = True
         time_limit = -1
 
-        wtime, btime = 200000, 200000  # think for 5 seconds. 5000 * 40
+        wtime, btime = 300000, 300000  # think for 5 seconds. 5000 * 60
         winc, binc = 0, 0
         movestogo = None
 
@@ -93,18 +93,23 @@ def main():
             node_limit_present = False
             time_limit_present = False
 
-        # statistical average of moves taken per game.
-        av_ply = 40
+        # statistical average of moves taken per game. -> 40 for human, 60 for engine.
+        av_ply = 60
 
         start_time = time.time()
         turn = engine.board.turn
-        time_left, inc, moves_made = (wtime, winc, engine.w_moves) if turn == chess.WHITE else (
-            btime, binc, engine.b_moves)
+        time_left, opp_time, inc, moves_made = (wtime, btime, winc, engine.w_moves) if turn == chess.WHITE else (
+            btime, wtime, binc, engine.b_moves)
 
 
-        time_control = int((time_left / (av_ply - moves_made + 1)) + inc)
+
         if movestogo != None:
             time_control = int((time_left / (movestogo + 1)) + inc)
+        else:
+            if time_left > 60000:
+                time_control = int((time_left / (av_ply - moves_made + 1)) + inc)
+            else:
+                time_control = 10
 
         def check_for_halt():
             while not engine.halt:
@@ -143,6 +148,9 @@ def main():
             output(f"bestmove {moves[0]} ponder {moves[1]}")
         else:
             output(f"bestmove {moves[0]}")
+        if debug:
+            print(engine.board)
+            print("White's turn to move" if engine.board.turn == chess.WHITE else "Black's turn to move")
 
     while True:
         if stack:
@@ -198,6 +206,7 @@ def main():
             else:
                 moves = []
 
+
             # If FEN is given.
             if params[1] == 'fen':
                 if index >= 0:
@@ -239,4 +248,4 @@ def main():
 
 if __name__ == "__main__":
     sys.stdout = Unbuffered(sys.stdout)
-    main()
+    main(debug=False)
