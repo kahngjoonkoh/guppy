@@ -56,6 +56,7 @@ def main():
 
         wtime, btime = 200000, 200000  # think for 5 seconds. 5000 * 40
         winc, binc = 0, 0
+        movestogo = None
 
         params = cmd.split(' ')
         if 'searchmoves' in params:
@@ -100,9 +101,10 @@ def main():
         time_left, inc, moves_made = (wtime, winc, engine.w_moves) if turn == chess.WHITE else (
             btime, binc, engine.b_moves)
 
-        time_control = int((time_left / (av_ply - moves_made)) + inc)
 
-        # time_control = int((time_left + inc) / (av_ply - moves_made))
+        time_control = int((time_left / (av_ply - moves_made + 1)) + inc)
+        if movestogo != None:
+            time_control = int((time_left / (movestogo + 1)) + inc)
 
         def check_for_halt():
             while not engine.halt:
@@ -131,9 +133,10 @@ def main():
         for depth, qdepth, score, nodes, move in engine.think():
             elapsed = int((time.time() - start_time) * 1000)
             if show_thinking and not engine.halt:
-                output(f"info depth {depth} seldepth {qdepth} score cp {score} time {elapsed} nodes {nodes} pv {move}")
-            t = Thread(target=check_for_halt)
-            t.start()
+                    output(f"info depth {depth} seldepth {qdepth} score cp {score} time {elapsed} nodes {nodes} pv {move}")
+            if depth >= 2:
+                t = Thread(target=check_for_halt)
+                t.start()
 
         moves = engine.return_bestmove()
         if len(moves) > 1:
@@ -198,9 +201,9 @@ def main():
             # If FEN is given.
             if params[1] == 'fen':
                 if index >= 0:
-                    fen = smove[:index].split(' ', 2)[2]
+                    fen = cmd[:index].split(' ', 2)[2]
                 else:
-                    fen = smove.split(' ', 2)[2]
+                    fen = cmd.split(' ', 2)[2]
 
             # To setup initial position.
             elif params[1] == 'startpos':

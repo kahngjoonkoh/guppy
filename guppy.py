@@ -1,10 +1,10 @@
+import os
+import sys
 from collections import OrderedDict
 from ctypes import *
-import concurrent.futures
+
 import chess
 import chess.polyglot
-import random
-import os, sys
 
 
 class Node:
@@ -42,7 +42,7 @@ class Engine:
 
         # NNUE INIT
         nnue_net_SHA256 = ["vdv", "48ada89402c9", "686c406dde55", "48ada89402c9", "d7a33434b6cc", "371e294c6117",
-                           "757def5fff5e", "a9f9e868162a", "0e698aa9eb8b", "04cf2b4ed1da"]\
+                           "757def5fff5e", "a9f9e868162a", "0e698aa9eb8b", "04cf2b4ed1da"]
 
         PATH = os.path.relpath(os.path.dirname(sys.argv[0]), os.getcwd())
         nnue_location = os.path.join(PATH, 'nnue\\libnnueprobe.exe')
@@ -51,16 +51,18 @@ class Engine:
         self.nnue = cdll.LoadLibrary(nnue_location)
         self.nnue.nnue_init(bytes(net_location, 'UTF-8'))
 
+        # TODO: Compare performance for each NNUE
+
         # NNUE networks from StockFish Neural Net Repository
-        # 48ada89402c9 -> author: vdv 21-05-01 16:35:42
-        # 686c406dde55 -> author: Fisherman 21-04-01 18:09:20
+        # 48ada89402c9 -> author: vdv 21-05-01 16:35:42 -> Makes frequent queen blunders.
+        # 686c406dde55 -> author: Fisherman 21-04-01 18:09:20 -> Cannot force mate
         # 48ada89402c9 -> author: MichaelB7 21-03-30 21:05:03
         # d7a33434b6cc -> author: Fisherman 21-03-29 23:27:55
         # 371e294c6117 -> author: MichaelB7 21-03-27 05:52:36
         # 757def5fff5e -> author: Fisherman 21-03-22 02:31:17
         # a9f9e868162a -> author: Fisherman 21-03-20 23:34:03
         # 0e698aa9eb8b -> author: MiauiKatze 21-02-23 08:49:58
-        # 04cf2b4ed1da -> author: vdv 20-10-12 05:22:36
+        # 04cf2b4ed1da -> author: vdv 20-10-12 05:22:36 -> knight blunders
 
         # CHESS VARIABLE/CONSTANTS INIT
         self.nodes = 0
@@ -68,12 +70,14 @@ class Engine:
         self.w_moves = 0
         self.b_moves = 0
 
-        self.CACHE_LIMIT = 10000
+        self.CACHE_LIMIT = 20000
         self.INFINITY = 10000
         # Average game takes 40 moves to finish = 80 plies
         self.MAX_SEARCH_DEPTH = 100
         # Evaluation adjustment
         self.ADJUST = 0
+
+        self.mate = False
 
         self.score_cache = LRUCache(10000)
         self.moves = {}
@@ -89,31 +93,44 @@ class Engine:
             # TODO: check if any errors with promotion.
             self.board.push(chess.Move.from_uci(move))
 
-    #TODO BOOK MOVES
+    # TODO BOOK MOVES
     # distinguish time utilisation for early, mid, end games.
     # Transition from engine.halt in a separate thread to internal break.
-    # Detect threefold-repetition and avoid it by reducing the score closer to 0.
     # add ponder
-    # First depth moves are really bad. Needs to get fixed
     # seldepth is greater than it should be.
     # near the end game it should have more depth not seldepth.
     # Create another counter for saving best moves so far. (without discarding all the ply)
     # Create UCI wrapper w/o threads
     # Move sort only when root.
 
+    #TODO ENGINE MISSES MATE IN 1. BECAUSE THE EVALUATION FUNCTION DOES NOT GIVE MATE AS VALUE.
+    # Implement mate score in evaluation function
+    # Currently does not avoid mates as well.
+    # FIX ISSUES WITH DETECTING MATE
+    # BAD AT ENDGAMES
+    # EVALUATION is different for each even and odd depth.
+    # TODO: Needs to find the fastest mate path.
     def think(self):
         self.nodes = 0
         fg = 0
         alpha = -self.INFINITY
         beta = self.INFINITY
+        self.mate = False
+
         for depth in range(1, self.MAX_SEARCH_DEPTH):
+            self.qdepth = 0
+            if self.mate:
+                break
             fg = self.MTDF(True, fg, depth)
             if not self.halt:
                 self.best_move = self.moves[self.board.fen()] # best move fallback
             else:
                 break
-            # score_cache = self.score_cache.get(self.board.fen()).lower_
-            yield depth, depth + self.qdepth, fg, self.nodes, self.best_move
+            if abs(fg) >= 9900:
+                score = fg if self.board.turn == chess.WHITE else -fg
+            else:
+                score = int(fg/2.56) if self.board.turn == chess.WHITE else -int(fg/2.56)
+            yield depth, depth + self.qdepth, score, self.nodes, self.best_move
         self.halt = True
 
     def MTDF(self, root, fg, depth):
@@ -137,16 +154,13 @@ class Engine:
     def alphabeta_with_memory(self, root, alpha, beta, depth, quiet, maximise, i):
         self.nodes += 1
 
-        #TODO: make engine halt and return value while discarding all ongoing calculations.
         if self.halt:
             return 0
 
         if self.board.is_checkmate():
-            if self.board.turn == chess.WHITE:
-                return -self.INFINITY
-            else:
-                return self.INFINITY
-        if self.board.is_stalemate():
+            return -self.INFINITY if self.board.turn == chess.WHITE else self.INFINITY
+
+        if self.board.is_stalemate() or self.board.is_repetition() or self.board.is_insufficient_material() or self.board.is_fifty_moves():
             return 0
 
         depth = max(depth, 0)
@@ -164,17 +178,17 @@ class Engine:
             n = Node(-self.INFINITY, self.INFINITY)
 
         if depth == 0:
-            if quiet: # Leaf node in quiet position
+            if quiet:  # Leaf node in quiet position
                 self.qdepth = max(self.qdepth, i)
                 return self.evaluate_board()
-
             else:
                 i += 1
-
         legals = self.board.legal_moves
+        # TODO: Make negamax approach.
+        # TODO: WHite starts the blunders.
         if maximise:
             g = -self.INFINITY
-            #sorting is less efficient than going through all the possible branches.
+            # sorting is less efficient than going through all the possible branches.
             if root:
                 legals = sorted(legals, key=lambda legal_move: self.move_value(legal_move), reverse=True)
             for move in legals:
@@ -187,7 +201,9 @@ class Engine:
                 if g >= beta:
                     if not self.halt:
                         self.moves[self.board.fen()] = move
-                    break
+                        if g == self.INFINITY:
+                            self.mate = True
+                        break
         else:  # if minimise
             g = self.INFINITY
             b = beta
@@ -202,6 +218,8 @@ class Engine:
                 if g <= alpha:
                     if not self.halt:
                         self.moves[self.board.fen()] = move
+                        if g == -self.INFINITY:
+                            self.mate = True
                     break
         if not self.halt:
             # When fail-low.
@@ -221,7 +239,7 @@ class Engine:
         return g
 
     def is_quiet(self, move):
-        return False if self.board.is_capture(move) else True
+        return False if self.board.is_capture(move) or self.board.gives_check(move) else True
 
     def evaluate_board(self):
         fen = self.board.fen()
@@ -246,7 +264,9 @@ class Engine:
         # ponder = self.moves.get(self.board.fen(), None)
         # return [bestmove, ponder] if ponder != None else [bestmove]
         self.board.push(self.best_move)
+
         print(self.board)
+        print("White's turn to move" if self.board.turn == chess.WHITE else "Black's turn to move")
         return [self.best_move]
 
     def add_move_counter(self):
