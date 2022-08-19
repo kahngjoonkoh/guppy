@@ -210,12 +210,13 @@ class Engine:
         # TODO: WHite starts the blunders.
         if maximise:
             g = -self.INFINITY
+            a = alpha
             # sorting is less efficient than going through all the possible branches.
             if root:
                 legals = sorted(legals, key=lambda legal_move: self.move_value(legal_move), reverse=True)
             for move in legals:
                 q = self.is_quiet(move)
-                a = alpha
+                # a = alpha
                 self.board.push(move)
                 g = max(g, self.alphabeta_with_memory(False, a, beta, depth - 1, q, not maximise, i))
                 a = max(a, g)
@@ -225,7 +226,7 @@ class Engine:
                         self.moves[self.board.fen()] = move
                         if g == self.INFINITY:
                             self.mate = True
-                        break
+                    break
         else:  # if minimise
             g = self.INFINITY
             b = beta
@@ -287,7 +288,7 @@ class Engine:
         else:
             fen = self.board.fen()
             score = self.nnue.nnue_evaluate_fen(fen.encode('UTF-8'))
-            print(self.nnue.nnue_evaluate_fen("r4rk1/pp3p1p/1qnb1np1/2ppp1b1/8/8/8/4K3 w - - 0 1".encode('UTF-8')))
+            # print(self.nnue.nnue_evaluate_fen("r4rk1/pp3p1p/1qnb1np1/2ppp1b1/8/8/8/4K3 w - - 0 1".encode('UTF-8')))
         return score if self.board.turn == chess.WHITE else -score
 
     # # used when sorting legal moves in best possible move order.
