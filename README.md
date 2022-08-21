@@ -1,11 +1,6 @@
 ## Guppy
 Guppy is a UCI chess engine written in Python. Includes NNUE evaluation.
 
-##TODO
-* Datatable lookup
-* more aggressive pruning
-* mate detection in seldepth
-
 ##Changelog
 ### [v0.1.0] - 5.22.2022
 Added Polyglot openings and Syzygy endgame tablebases.
